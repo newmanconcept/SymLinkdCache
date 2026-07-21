@@ -43,6 +43,7 @@ public struct CacheItem: Identifiable, Equatable {
     public var isRunning: Bool
     public var guidanceSteps: [String]
     public var documentationURL: String?
+    public var isPrimary: Bool
     
     public init(
         id: UUID = UUID(),
@@ -56,7 +57,8 @@ public struct CacheItem: Identifiable, Equatable {
         status: CacheStatus = .idle,
         isRunning: Bool = false,
         guidanceSteps: [String] = [],
-        documentationURL: String? = nil
+        documentationURL: String? = nil,
+        isPrimary: Bool = false
     ) {
         self.id = id
         self.name = name
@@ -70,6 +72,7 @@ public struct CacheItem: Identifiable, Equatable {
         self.isRunning = isRunning
         self.guidanceSteps = guidanceSteps
         self.documentationURL = documentationURL
+        self.isPrimary = isPrimary
     }
     
     public var isSymlinked: Bool {
@@ -87,6 +90,27 @@ public struct CacheItem: Identifiable, Equatable {
     public var symlinkDestination: String? {
         guard isSymlinked else { return nil }
         return try? FileManager.default.destinationOfSymbolicLink(atPath: sourcePath.path)
+    }
+    
+    public var initials: String {
+        let clean = name.replacingOccurrences(of: "CLIENT CACHE", with: "")
+                        .replacingOccurrences(of: "CACHE", with: "")
+                        .replacingOccurrences(of: "CONTAINER", with: "")
+                        .replacingOccurrences(of: "SUPPORT", with: "")
+                        .trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        let words = clean.components(separatedBy: .whitespaces)
+        if words.count >= 2 {
+            let first = words[0].prefix(1)
+            let second = words[1].prefix(1)
+            return "\(first)\(second)".uppercased()
+        } else if clean.count >= 2 {
+            return String(clean.prefix(2)).uppercased()
+        } else if clean.count == 1 {
+            return clean.uppercased() + "X"
+        } else {
+            return "CC"
+        }
     }
 }
 

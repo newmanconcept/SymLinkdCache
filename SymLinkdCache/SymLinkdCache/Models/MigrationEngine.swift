@@ -52,118 +52,24 @@ public final class MigrationEngine: ObservableObject {
     
     private func setupDefaultItems() {
         let home = fileManager.homeDirectoryForCurrentUser
-        
-        let config: [(name: String, bundleId: String?, execName: String?, category: AppCategory, relativePath: String, subpath: String, steps: [String], doc: String?)] = [
-            (
-                name: "FIGMA CLIENT CACHE",
-                bundleId: "com.figma.Desktop",
-                execName: "Figma",
-                category: .directMigration,
-                relativePath: "Library/Application Support/Figma",
-                subpath: "Figma_Data",
-                steps: [],
-                doc: nil
-            ),
-            (
-                name: "SPOTIFY CACHE",
-                bundleId: "com.spotify.client",
-                execName: "Spotify",
-                category: .directMigration,
-                relativePath: "Library/Caches/com.spotify.client",
-                subpath: "Spotify_Cache",
-                steps: [],
-                doc: nil
-            ),
-            (
-                name: "CHROME CACHE",
-                bundleId: "com.google.Chrome",
-                execName: "Google Chrome",
-                category: .directMigration,
-                relativePath: "Library/Caches/Google/Chrome",
-                subpath: "Chrome_Cache",
-                steps: [],
-                doc: nil
-            ),
-            (
+        self.items = [
+            CacheItem(
                 name: "XCODE DERIVED DATA",
-                bundleId: "com.apple.dt.Xcode",
-                execName: "Xcode",
+                bundleIdentifier: "com.apple.dt.Xcode",
+                executableName: "Xcode",
                 category: .directMigration,
-                relativePath: "Library/Developer/Xcode/DerivedData",
-                subpath: "Xcode_DerivedData",
-                steps: [],
-                doc: nil
+                sourcePath: home.appendingPathComponent("Library/Developer/Xcode/DerivedData"),
+                targetSubpath: "Xcode_DerivedData"
             ),
-            (
+            CacheItem(
                 name: "XCODE IOS DEVICESUPPORT",
-                bundleId: "com.apple.dt.Xcode",
-                execName: "Xcode",
+                bundleIdentifier: "com.apple.dt.Xcode",
+                executableName: "Xcode",
                 category: .directMigration,
-                relativePath: "Library/Developer/Xcode/iOS DeviceSupport",
-                subpath: "Xcode_iOSDeviceSupport",
-                steps: [],
-                doc: nil
-            ),
-            (
-                name: "SLACK CONTAINER CACHE",
-                bundleId: "com.tinyspeck.slackmacgap",
-                execName: "Slack",
-                category: .directMigration,
-                relativePath: "Library/Containers/com.tinyspeck.slackmacgap/Data/Library/Caches/com.tinyspeck.slackmacgap",
-                subpath: "Slack_Cache",
-                steps: [],
-                doc: nil
-            ),
-            (
-                name: "ADOBE PREMIERE CACHE",
-                bundleId: "com.adobe.PremierePro",
-                execName: "Adobe Premiere Pro",
-                category: .nativeGuidance,
-                relativePath: "Library/Application Support/Adobe/Common/Media Cache Files",
-                subpath: "Adobe_Media_Cache",
-                steps: [
-                    "Launch Adobe Premiere Pro on your Mac.",
-                    "Navigate to Preferences > Media Cache.",
-                    "Locate 'Media Cache Files' and click '[ Browse... ]'.",
-                    "Choose a folder on your external drive.",
-                    "Select 'Move existing media cache files' when prompted."
-                ],
-                doc: "https://helpx.adobe.com/premiere-pro/using/preferences.html#MediaCache"
-            ),
-            (
-                name: "DAVINCI RESOLVE CACHE",
-                bundleId: "com.blackmagic-design.DaVinciResolve",
-                execName: "DaVinci Resolve",
-                category: .nativeGuidance,
-                relativePath: "Library/Application Support/Blackmagic Design/DaVinci Resolve",
-                subpath: "Resolve_Cache",
-                steps: [
-                    "Open DaVinci Resolve.",
-                    "Open Preferences (Command + ,).",
-                    "Navigate to System > Media Storage.",
-                    "Click '[ Add ]' and choose your external drive folder.",
-                    "Ensure it is placed at the top of the storage list."
-                ],
-                doc: "https://www.blackmagicdesign.com/products/davinciresolve"
+                sourcePath: home.appendingPathComponent("Library/Developer/Xcode/iOS DeviceSupport"),
+                targetSubpath: "Xcode_iOSDeviceSupport"
             )
         ]
-        
-        self.items = config.map { cfg in
-            let fullURL = home.appendingPathComponent(cfg.relativePath)
-            return CacheItem(
-                name: cfg.name,
-                bundleIdentifier: cfg.bundleId,
-                executableName: cfg.execName,
-                category: cfg.category,
-                sourcePath: fullURL,
-                targetSubpath: cfg.subpath,
-                sizeInBytes: 0,
-                status: .idle,
-                isRunning: false,
-                guidanceSteps: cfg.steps,
-                documentationURL: cfg.doc
-            )
-        }
     }
     
     public func checkFDA() {
@@ -179,34 +85,155 @@ public final class MigrationEngine: ObservableObject {
     
     public func scanAll() async {
         isScanning = true
-        AppLogger.shared.log("STARTING ASYNCHRONOUS SCAN OF CACHE PATHS...", type: .info)
+        AppLogger.shared.log("STARTING DYNAMIC DISCOVERY OF ALL SYSTEM CACHES...", type: .info)
         checkFDA()
         
-        for index in items.indices {
-            let item = items[index]
+        let home = fileManager.homeDirectoryForCurrentUser
+        
+        // 1. Seed special folders
+        var scanTargets: [CacheItem] = [
+            CacheItem(
+                name: "XCODE DERIVED DATA",
+                bundleIdentifier: "com.apple.dt.Xcode",
+                executableName: "Xcode",
+                category: .directMigration,
+                sourcePath: home.appendingPathComponent("Library/Developer/Xcode/DerivedData"),
+                targetSubpath: "Xcode_DerivedData"
+            ),
+            CacheItem(
+                name: "XCODE IOS DEVICESUPPORT",
+                bundleIdentifier: "com.apple.dt.Xcode",
+                executableName: "Xcode",
+                category: .directMigration,
+                sourcePath: home.appendingPathComponent("Library/Developer/Xcode/iOS DeviceSupport"),
+                targetSubpath: "Xcode_iOSDeviceSupport"
+            ),
+            CacheItem(
+                name: "ADOBE PREMIERE CACHE",
+                bundleIdentifier: "com.adobe.PremierePro",
+                executableName: "Adobe Premiere Pro",
+                category: .nativeGuidance,
+                sourcePath: home.appendingPathComponent("Library/Application Support/Adobe/Common/Media Cache Files"),
+                targetSubpath: "Adobe_Media_Cache",
+                guidanceSteps: [
+                    "Launch Adobe Premiere Pro on your Mac.",
+                    "Navigate to Preferences > Media Cache.",
+                    "Locate 'Media Cache Files' and click '[ Browse... ]'.",
+                    "Choose a folder on your external drive.",
+                    "Select 'Move existing media cache files' when prompted."
+                ],
+                documentationURL: "https://helpx.adobe.com/premiere-pro/using/preferences.html#MediaCache"
+            ),
+            CacheItem(
+                name: "DAVINCI RESOLVE CACHE",
+                bundleIdentifier: "com.blackmagic-design.DaVinciResolve",
+                executableName: "DaVinci Resolve",
+                category: .nativeGuidance,
+                sourcePath: home.appendingPathComponent("Library/Application Support/Blackmagic Design/DaVinci Resolve"),
+                targetSubpath: "Resolve_Cache",
+                guidanceSteps: [
+                    "Open DaVinci Resolve.",
+                    "Open Preferences (Command + ,).",
+                    "Navigate to System > Media Storage.",
+                    "Click '[ Add ]' and choose your external drive folder.",
+                    "Ensure it is placed at the top of the storage list."
+                ],
+                documentationURL: "https://www.blackmagicdesign.com/products/davinciresolve"
+            )
+        ]
+        
+        // 2. Discover caches in Library/Caches
+        let cachesURL = home.appendingPathComponent("Library/Caches")
+        do {
+            let keys: [URLResourceKey] = [.isDirectoryKey, .isSymbolicLinkKey]
+            let directories = try fileManager.contentsOfDirectory(
+                at: cachesURL,
+                includingPropertiesForKeys: keys,
+                options: [.skipsSubdirectoryDescendants, .skipsHiddenFiles]
+            )
             
-            // Check if folder exists
+            for url in directories {
+                let resourceValues = try? url.resourceValues(forKeys: Set(keys))
+                let isDir = resourceValues?.isDirectory ?? false
+                let isSym = resourceValues?.isSymbolicLink ?? false
+                
+                guard isDir || isSym else { continue }
+                
+                let folderName = url.lastPathComponent
+                if folderName.hasPrefix(".") || folderName == "CloudKit" || folderName == "Desktop" {
+                    continue
+                }
+                
+                if scanTargets.contains(where: { $0.sourcePath == url }) {
+                    continue
+                }
+                
+                let displayName = knownName(for: folderName) ?? (cleanAppName(from: folderName) + " CACHE")
+                
+                var bundleId: String? = nil
+                var execName: String? = nil
+                if folderName.contains("com.") {
+                    bundleId = folderName
+                    execName = cleanAppName(from: folderName)
+                }
+                
+                scanTargets.append(CacheItem(
+                    name: displayName.uppercased(),
+                    bundleIdentifier: bundleId,
+                    executableName: execName,
+                    category: .directMigration,
+                    sourcePath: url,
+                    targetSubpath: "Caches/\(folderName)"
+                ))
+            }
+        } catch {
+            AppLogger.shared.log("FAILED LISTING LIBRARY/CACHES: \(error.localizedDescription)", type: .error)
+        }
+        
+        // 3. Process sizes and filter out empty directories that aren't symlinked
+        var activeItems: [CacheItem] = []
+        
+        for item in scanTargets {
             if fileManager.fileExists(atPath: item.sourcePath.path) {
-                items[index].status = .scanning
+                var updatedItem = item
+                updatedItem.status = .scanning
+                
+                let runningApps = NSWorkspace.shared.runningApplications
+                if let bundleId = item.bundleIdentifier {
+                    updatedItem.isRunning = runningApps.contains { $0.bundleIdentifier == bundleId }
+                } else if let execName = item.executableName {
+                    updatedItem.isRunning = runningApps.contains { $0.localizedName == execName }
+                }
+                
                 do {
                     let size = try await calculateFolderSize(at: item.sourcePath)
-                    items[index].sizeInBytes = size
-                    items[index].status = .idle
-                    AppLogger.shared.log("SCANNED: \(item.name) | SIZE: \(size.formattedSize)", type: .info)
+                    updatedItem.sizeInBytes = size
+                    updatedItem.status = .idle
+                    
+                    if size > 0 || updatedItem.isSymlinked || updatedItem.category == .nativeGuidance {
+                        activeItems.append(updatedItem)
+                        AppLogger.shared.log("DISCOVERED: \(updatedItem.name) | SIZE: \(size.formattedSize) \(updatedItem.isSymlinked ? "[LINKED]" : "")", type: .info)
+                    }
                 } catch {
-                    items[index].status = .failed(error.localizedDescription)
-                    AppLogger.shared.log("SCAN FAILED: \(item.name) | \(error.localizedDescription)", type: .error)
+                    updatedItem.status = .failed(error.localizedDescription)
+                    activeItems.append(updatedItem)
+                    AppLogger.shared.log("DISCOVERY ERROR (\(item.name)): \(error.localizedDescription)", type: .error)
                 }
-            } else {
-                items[index].sizeInBytes = 0
-                items[index].status = .idle
-                AppLogger.shared.log("PATH NOT FOUND (SKIPPED): \(item.name)", type: .info)
             }
         }
         
+        // Sort: active links first, then size descending
+        activeItems.sort { (lhs, rhs) -> Bool in
+            if lhs.isSymlinked != rhs.isSymlinked {
+                return lhs.isSymlinked && !rhs.isSymlinked
+            }
+            return lhs.sizeInBytes > rhs.sizeInBytes
+        }
+        
+        self.items = activeItems
         refreshRunningStates()
         isScanning = false
-        AppLogger.shared.log("ASYNCHRONOUS SCAN COMPLETED.", type: .success)
+        AppLogger.shared.log("DISCOVERY COMPLETE. DETECTED \(activeItems.count) CACHES.", type: .success)
     }
     
     private func calculateFolderSize(at url: URL) async throws -> Int64 {
@@ -399,5 +426,29 @@ public final class MigrationEngine: ObservableObject {
             let fm = FileManager()
             try fm.copyItem(at: src, to: dest)
         }.value
+    }
+    
+    private func cleanAppName(from folderName: String) -> String {
+        let parts = folderName.components(separatedBy: ".")
+        if parts.count >= 2 {
+            for part in parts.reversed() {
+                let cleanPart = part.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+                if cleanPart != "client" && cleanPart != "caches" && cleanPart != "desktop" && cleanPart != "helper" && cleanPart != "mac" && cleanPart != "macos" && !cleanPart.isEmpty {
+                    return part.capitalized
+                }
+            }
+            return parts.last!.capitalized
+        }
+        return folderName.capitalized
+    }
+    
+    private func knownName(for folderName: String) -> String? {
+        let lower = folderName.lowercased()
+        if lower.contains("com.spotify.client") { return "SPOTIFY CACHE" }
+        if lower.contains("com.figma.desktop") { return "FIGMA CLIENT CACHE" }
+        if lower.contains("google/chrome") || lower.contains("com.google.chrome") { return "CHROME CACHE" }
+        if lower.contains("com.tinyspeck.slackmacgap") { return "SLACK CONTAINER CACHE" }
+        if lower.contains("com.apple.dt.xcode") { return "XCODE CACHE" }
+        return nil
     }
 }
